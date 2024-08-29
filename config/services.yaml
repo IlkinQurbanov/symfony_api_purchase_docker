@@ -1,6 +1,9 @@
-# config/services.yaml
 parameters:
     jwt_secret: '%env(JWT_SECRET)%'
+    paypal_client_id: '%env(PAYPAL_CLIENT_ID)%'
+    paypal_client_secret: '%env(PAYPAL_CLIENT_SECRET)%'
+    paypal_endpoint: '%env(PAYPAL_ENDPOINT)%'
+
 
 services:
     _defaults:
@@ -21,7 +24,4 @@ services:
         arguments:
             $jwtSecret: '%jwt_secret%'
 
-    App\Service\PaymentService:
-        arguments:
-            $clientId: '%env(PAYPAL_CLIENT_ID)%'
-            $clientSecret: '%env(PAYPAL_CLIENT_SECRET)%'
+  
