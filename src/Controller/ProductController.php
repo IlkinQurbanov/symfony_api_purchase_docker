@@ -38,7 +38,6 @@ class ProductController extends AbstractController
         $this->paypalService = $paypalService;
         $this->urlGenerator = $urlGenerator;
     }
-
     #[Route('/purchase-paypal', name: 'purchase_paypal', methods: ['POST'])]
     public function purchaseWithPaypal(Request $request): JsonResponse
     {
@@ -46,26 +45,26 @@ class ProductController extends AbstractController
         $productId = $data['product'] ?? null;
         $taxNumber = $data['taxNumber'] ?? null;
         $couponCode = $data['couponCode'] ?? null;
-
+    
         if (!$productId || !$taxNumber) {
             return new JsonResponse(['error' => 'Product ID and tax number are required.'], 400);
         }
-
+    
         $product = $this->entityManager->getRepository(Product::class)->find($productId);
         if (!$product) {
             return new JsonResponse(['error' => 'Product not found'], 400);
         }
-
+    
         $countryCode = substr($taxNumber, 0, 2);
         $tax = $this->entityManager->getRepository(Tax::class)->findOneBy(['countryCode' => $countryCode]);
         if (!$tax) {
             return new JsonResponse(['error' => 'Invalid tax number'], 400);
         }
-
+    
         $price = $product->getPrice();
         $taxAmount = $price * ($tax->getRate() / 100);
         $totalPrice = $price + $taxAmount;
-
+    
         if ($couponCode) {
             $coupon = $this->entityManager->getRepository(Coupon::class)->findOneBy(['code' => $couponCode]);
             if ($coupon) {
@@ -76,45 +75,67 @@ class ProductController extends AbstractController
                 }
             }
         }
-
+    
         $returnUrl = $this->urlGenerator->generate('complete_payment', [], UrlGeneratorInterface::ABSOLUTE_URL);
         $cancelUrl = $this->urlGenerator->generate('cancel_payment', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
+    
         try {
             $order = $this->paypalService->createOrder($totalPrice, $returnUrl, $cancelUrl);
+            $approveUrl = null;
+    
+            foreach ($order->links as $link) {
+                if ($link->rel === 'approve') {
+                    $approveUrl = $link->href;
+                    break;
+                }
+            }
+    
+            if (!$approveUrl) {
+                throw new \RuntimeException('Approve URL not found');
+            }
+    
+            return new JsonResponse(['orderId' => $order->id, 'redirectUrl' => $approveUrl], 200);
         } catch (\RuntimeException $e) {
             return new JsonResponse(['error' => $e->getMessage()], 500);
         }
-
-        return new JsonResponse(['orderId' => $order->id, 'redirectUrl' => $order->links[1]->href], 200);
     }
+    
 
     #[Route('/complete-payment', name: 'complete_payment', methods: ['GET'])]
     public function completePayment(Request $request): JsonResponse
     {
         $orderId = $request->query->get('token');
-
+    
         if (!$orderId) {
             return new JsonResponse(['error' => 'Order ID is required.'], 400);
         }
-
+    
         try {
+            // Capture the PayPal order
             $order = $this->paypalService->captureOrder($orderId);
-
+    
+            // Ensure the order is approved
+            if ($order->status !== 'COMPLETED') {
+                return new JsonResponse(['error' => 'Order not approved. Please complete the payment process.'], 400);
+            }
+    
             // Save purchase details in the database
             $purchase = new Purchase();
             $purchase->setProduct($this->entityManager->getRepository(Product::class)->find($order->purchase_units[0]->reference_id));
             $purchase->setUserId($this->tokenStorage->getToken()->getUser()->getId());
             $purchase->setTotalPrice($order->purchase_units[0]->amount->value);
             $purchase->setPaymentProcessor('paypal');
+    
             $this->entityManager->persist($purchase);
             $this->entityManager->flush();
-
+    
             return new JsonResponse(['message' => 'Payment successful'], 200);
         } catch (\RuntimeException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 500);
+            return new JsonResponse(['error' => 'Error capturing PayPal order: ' . $e->getMessage()], 500);
         }
     }
+    
+    
 
     #[Route('/cancel-payment', name: 'cancel_payment', methods: ['GET'])]
     public function cancelPayment(): JsonResponse
