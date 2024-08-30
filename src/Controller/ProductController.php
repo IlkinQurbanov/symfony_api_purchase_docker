@@ -20,7 +20,7 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class ProductController extends AbstractController
 {
-    // Add these properties to your controller
+    
     private $paypalService;
     private $urlGenerator;
 

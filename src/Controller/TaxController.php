@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Controller;
 
 use App\Entity\Tax;
@@ -13,29 +12,28 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class TaxController extends AbstractController
 {
-    private $entityManager;
-    private $taxRepository;
+    private TaxRepository $taxRepository;
+    private EntityManagerInterface $entityManager;
 
-    public function __construct(EntityManagerInterface $entityManager, TaxRepository $taxRepository)
+    public function __construct(TaxRepository $taxRepository, EntityManagerInterface $entityManager)
     {
-        $this->entityManager = $entityManager;
         $this->taxRepository = $taxRepository;
+        $this->entityManager = $entityManager;
     }
 
     #[Route('/taxes', name: 'list_taxes', methods: ['GET'])]
     public function listTaxes(): JsonResponse
     {
         $taxes = $this->taxRepository->findAll();
-        $data = [];
 
-        foreach ($taxes as $tax) {
-            $data[] = [
+        $data = array_map(function (Tax $tax) {
+            return [
                 'countryCode' => $tax->getCountryCode(),
                 'rate' => $tax->getRate(),
             ];
-        }
+        }, $taxes);
 
-        return new JsonResponse($data, 200);
+        return $this->json($data);
     }
 
     #[Route('/tax/{countryCode}', name: 'get_tax', methods: ['GET'])]
@@ -44,13 +42,13 @@ class TaxController extends AbstractController
         $tax = $this->taxRepository->find($countryCode);
 
         if (!$tax) {
-            return new JsonResponse(['error' => 'Tax not found'], 404);
+            return $this->json(['status' => 'error', 'message' => 'Tax not found'], 404);
         }
 
-        return new JsonResponse([
+        return $this->json([
             'countryCode' => $tax->getCountryCode(),
             'rate' => $tax->getRate(),
-        ], 200);
+        ]);
     }
 
     #[Route('/tax', name: 'create_tax', methods: ['POST'])]
@@ -58,21 +56,18 @@ class TaxController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
 
-        $countryCode = $data['countryCode'] ?? null;
-        $rate = $data['rate'] ?? null;
-
-        if (!$countryCode || !$rate) {
-            return new JsonResponse(['error' => 'Country code and rate are required'], 400);
+        if (empty($data['countryCode']) || empty($data['rate'])) {
+            return $this->json(['status' => 'error', 'message' => 'Country code and rate are required.'], 400);
         }
 
         $tax = new Tax();
-        $tax->setCountryCode($countryCode);
-        $tax->setRate($rate);
+        $tax->setCountryCode($data['countryCode']);
+        $tax->setRate($data['rate']);
 
         $this->entityManager->persist($tax);
         $this->entityManager->flush();
 
-        return new JsonResponse(['message' => 'Tax created successfully'], 201);
+        return $this->json(['status' => 'success', 'message' => 'Tax created successfully.'], 201);
     }
 
     #[Route('/tax/{countryCode}', name: 'update_tax', methods: ['PUT'])]
@@ -81,19 +76,17 @@ class TaxController extends AbstractController
         $tax = $this->taxRepository->find($countryCode);
 
         if (!$tax) {
-            return new JsonResponse(['error' => 'Tax not found'], 404);
+            return $this->json(['status' => 'error', 'message' => 'Tax not found.'], 404);
         }
 
         $data = json_decode($request->getContent(), true);
 
-        $rate = $data['rate'] ?? null;
-
-        if ($rate) {
-            $tax->setRate($rate);
+        if (isset($data['rate'])) {
+            $tax->setRate($data['rate']);
             $this->entityManager->flush();
         }
 
-        return new JsonResponse(['message' => 'Tax updated successfully'], 200);
+        return $this->json(['status' => 'success', 'message' => 'Tax updated successfully.']);
     }
 
     #[Route('/tax/{countryCode}', name: 'delete_tax', methods: ['DELETE'])]
@@ -102,12 +95,12 @@ class TaxController extends AbstractController
         $tax = $this->taxRepository->find($countryCode);
 
         if (!$tax) {
-            return new JsonResponse(['error' => 'Tax not found'], 404);
+            return $this->json(['status' => 'error', 'message' => 'Tax not found.'], 404);
         }
 
         $this->entityManager->remove($tax);
         $this->entityManager->flush();
 
-        return new JsonResponse(['message' => 'Tax deleted successfully'], 200);
+        return $this->json(['status' => 'success', 'message' => 'Tax deleted successfully.']);
     }
 }

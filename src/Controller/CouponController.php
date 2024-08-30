@@ -1,6 +1,5 @@
 <?php
 
-// src/Controller/CouponController.php
 
 namespace App\Controller;
 
