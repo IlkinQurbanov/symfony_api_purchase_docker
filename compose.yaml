@@ -1,6 +1,5 @@
-
 services:
-###> doctrine/doctrine-bundle ###
+  ###> doctrine/doctrine-bundle ###
   database:
     image: postgres:${POSTGRES_VERSION:-16}-alpine
     environment:
@@ -17,9 +16,23 @@ services:
       - database_data:/var/lib/postgresql/data:rw
       # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
       # - ./docker/db/data:/var/lib/postgresql/data:rw
-###< doctrine/doctrine-bundle ###
+  ###< doctrine/doctrine-bundle ###
+
+  sio_test:
+    user: app
+    build:
+      context: .
+      args:
+        USER_ID: ${USER_ID:-1000}
+    ports:
+      - "8337:8337"
+    volumes:
+      - .:/app:rw
+    environment:
+      - APP_ENV=dev
+    command: ["php", "-S", "0.0.0.0:8337", "-t", "public"]
 
 volumes:
-###> doctrine/doctrine-bundle ###
+  ###> doctrine/doctrine-bundle ###
   database_data:
-###< doctrine/doctrine-bundle ###
+  ###< doctrine/doctrine-bundle ###
